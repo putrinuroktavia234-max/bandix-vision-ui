@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<!--
+  Bandix Network Monitor - Modern UI for OpenWRT
+  
+  INSTALLATION:
+  1. Copy this folder to /www/bandix/ on your OpenWRT router
+  2. Access via http://192.168.1.1/bandix
+  
+  BACKEND INTEGRATION:
+  - Reads data from bandixd via CGI endpoints or direct file access
+  - Speed limits use existing Bandix mechanisms (bandix-limit command)
+  - No modifications to bandixd required
+  
+  Author: Lovable AI
+  Target: OpenWRT 24.x with timsaya/openwrt-bandix
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bandix - Network Monitor</title>
+  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="Real-time bandwidth monitoring for OpenWRT">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container header-content">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="logo-text">Bandix</h1>
+          <p class="logo-subtitle">Network Monitor</p>
+        </div>
+      </div>
+      
+      <div class="header-status">
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Checking...</span>
+        </div>
+        <div class="status-item">
+          <span id="currentInterface">br-lan</span>
+        </div>
+        <div class="status-item">
+          Uptime: <span id="uptime">--</span>
+        </div>
+        <button class="btn-icon" id="refreshBtn" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2v6h-6"></path>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+            <path d="M3 22v-6h6"></path>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container main-content">
+    <!-- Stats Cards -->
+    <section class="stats-grid">
+      <div class="stat-card stat-download">
+        <div class="stat-info">
+          <p class="stat-label">Download Speed</p>
+          <p class="stat-value" id="totalDownSpeed">0 B/s</p>
+        </div>
+        <div class="stat-icon download">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+      </div>
+
+      <div class="stat-card stat-upload">
+        <div class="stat-info">
+          <p class="stat-label">Upload Speed</p>
+          <p class="stat-value" id="totalUpSpeed">0 B/s</p>
+        </div>
+        <div class="stat-icon upload">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+      </div>
+
+      <div class="stat-card stat-total">
+        <div class="stat-info">
+          <p class="stat-label">Total Downloaded</p>
+          <p class="stat-value" id="totalDownload">0 B</p>
+        </div>
+        <div class="stat-icon primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      <div class="stat-card stat-devices">
+        <div class="stat-info">
+          <p class="stat-label">Active Devices</p>
+          <p class="stat-value" id="deviceCount">0</p>
+          <p class="stat-subtitle">connected now</p>
+        </div>
+        <div class="stat-icon primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bandwidth Chart -->
+    <section class="chart-section card">
+      <div class="chart-header">
+        <h3>Real-time Bandwidth</h3>
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-dot download"></div>
+            <span>Down:</span>
+            <span class="legend-value" id="currentDown">0 B/s</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot upload"></div>
+            <span>Up:</span>
+            <span class="legend-value" id="currentUp">0 B/s</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="bandwidthChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Main Grid -->
+    <section class="content-grid">
+      <!-- Clients Table -->
+      <div class="clients-section">
+        <div class="card">
+          <div class="card-header">
+            <h3>Connected Devices</h3>
+            <p class="card-subtitle"><span id="clientCount">0</span> device(s) active</p>
+          </div>
+          <div class="table-container">
+            <table class="clients-table">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="hostname">Device</th>
+                  <th class="sortable hidden-mobile" data-sort="ip">IP / MAC</th>
+                  <th class="sortable text-right" data-sort="downloadSpeed">↓ Speed</th>
+                  <th class="sortable text-right" data-sort="uploadSpeed">↑ Speed</th>
+                  <th class="sortable text-right hidden-sm" data-sort="download">↓ Total</th>
+                  <th class="sortable text-right hidden-sm" data-sort="upload">↑ Total</th>
+                  <th class="text-center">Limit</th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody">
+                <!-- Populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Controls -->
+      <div class="sidebar-controls">
+        <!-- Interface Selector -->
+        <div class="card">
+          <div class="card-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-primary">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+              <line x1="6" y1="6" x2="6.01" y2="6"></line>
+              <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            <h3>Monitor Interface</h3>
+          </div>
+          <div class="interface-grid" id="interfaceGrid">
+            <button class="interface-btn active" data-interface="br-lan">
+              <span class="interface-name">LAN Bridge</span>
+              <span class="interface-id">br-lan</span>
+            </button>
+            <button class="interface-btn" data-interface="eth0">
+              <span class="interface-name">WAN</span>
+              <span class="interface-id">eth0</span>
+            </button>
+            <button class="interface-btn" data-interface="wlan0">
+              <span class="interface-name">WiFi 2.4GHz</span>
+              <span class="interface-id">wlan0</span>
+            </button>
+            <button class="interface-btn" data-interface="wlan1">
+              <span class="interface-name">WiFi 5GHz</span>
+              <span class="interface-id">wlan1</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Service Controls -->
+        <div class="card">
+          <div class="card-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-primary">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+              <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
+            <h3>Service Control</h3>
+          </div>
+          <div class="service-status">
+            <div class="status-dot" id="serviceDot"></div>
+            <span>bandixd is <span id="serviceStatus">checking...</span></span>
+          </div>
+          <div class="service-buttons">
+            <button class="btn btn-stop" id="btnStop">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12"></rect>
+              </svg>
+              Stop
+            </button>
+            <button class="btn btn-restart" id="btnRestart">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2v6h-6"></path>
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                <path d="M3 22v-6h6"></path>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+              </svg>
+              Restart
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Speed Limit Modal -->
+  <div class="modal-overlay" id="limitModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <div class="modal-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 6v6l4 2"></path>
+            </svg>
+          </div>
+          <div>
+            <h2>Speed Limit</h2>
+            <p id="limitClientName">Device Name</p>
+          </div>
+        </div>
+        <button class="btn-close" id="closeModal">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="presets">
+          <p class="preset-label">Quick Presets</p>
+          <div class="preset-grid">
+            <button class="preset-btn" data-down="1000" data-up="500">1 Mbps</button>
+            <button class="preset-btn" data-down="5000" data-up="2500">5 Mbps</button>
+            <button class="preset-btn" data-down="10000" data-up="5000">10 Mbps</button>
+            <button class="preset-btn" data-down="25000" data-up="10000">25 Mbps</button>
+            <button class="preset-btn" data-down="50000" data-up="20000">50 Mbps</button>
+          </div>
+        </div>
+        
+        <div class="slider-group">
+          <label>
+            <span>Download Limit</span>
+            <span class="slider-value download" id="downLimitValue">10 Mbps</span>
+          </label>
+          <input type="range" id="downLimitSlider" min="100" max="100000" step="100" value="10000" class="slider download">
+        </div>
+        
+        <div class="slider-group">
+          <label>
+            <span>Upload Limit</span>
+            <span class="slider-value upload" id="upLimitValue">5 Mbps</span>
+          </label>
+          <input type="range" id="upLimitSlider" min="100" max="50000" step="100" value="5000" class="slider upload">
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelLimit">Cancel</button>
+        <button class="btn btn-primary" id="applyLimit">Apply Limit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>Bandix Network Monitor • OpenWRT 24.x</p>
+      <p class="footer-subtitle">Real-time updates every 1 second</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
