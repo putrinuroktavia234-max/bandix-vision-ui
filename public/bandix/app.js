@@ -39,8 +39,8 @@
     // API base path (adjust for your OpenWRT setup)
     apiBase: '/cgi-bin/luci/admin/services/bandix',
     
-    // Enable demo mode for testing (set to false in production)
-    demoMode: true,
+    // Demo mode disabled - ready for production
+    demoMode: false,
     
     // Chart history length (60 seconds)
     historyLength: 60
